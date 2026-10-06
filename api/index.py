@@ -46,15 +46,28 @@ app.add_middleware(
 )
 
 def find_file(rel_path: str) -> Optional[Path]:
+    filename = Path(rel_path).name
     candidates = [
-        Path(__file__).resolve().parent.parent / rel_path,
         Path(__file__).resolve().parent / rel_path,
+        Path(__file__).resolve().parent / filename,
+        Path(__file__).resolve().parent / "data" / filename,
+        Path(__file__).resolve().parent.parent / rel_path,
+        Path(__file__).resolve().parent.parent / filename,
         Path.cwd() / rel_path,
+        Path.cwd() / filename,
         Path(rel_path),
     ]
     for p in candidates:
         if p.exists() and p.is_file():
             return p
+    # Recursive fallback
+    for base in [Path(__file__).resolve().parent, Path(__file__).resolve().parent.parent, Path.cwd()]:
+        try:
+            for root, _, files in os.walk(base):
+                if filename in files:
+                    return Path(root) / filename
+        except Exception:
+            pass
     return None
 
 _BUNDLE: dict = {}
