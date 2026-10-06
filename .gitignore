@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment & secrets
+.env
+*.env.local
+.vercel
+.streamlit/secrets.toml
+
+# Data & databases
+data/*.db
+data/chroma/
+*.db
+!data/bundle.json
+
+# Logs
+logs/
+*.log
+
+# Reports (generated)
+reports/synthesis_report.md
+reports/eval_scorecard.json
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/

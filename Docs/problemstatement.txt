@@ -1,0 +1,178 @@
+m statement · TXT
+PROJECT: AI-Powered Discovery Engine for Google Photos Retrieval Research
+=========================================================================
+ 
+ROLE AND CONTEXT
+-----------------
+I am a Product Manager on the Core Experience team at Google Photos.
+Users accumulate thousands of photos, videos, screenshots and documents
+over years of use. When they remember a photo exists but cannot describe
+it precisely (no date, place, or exact keywords), retrieval breaks down.
+ 
+Business goal: increase the percentage of users who successfully retrieve
+a photo they remember but cannot precisely describe when they start
+searching.
+ 
+This is NOT a "make search better in general" project. The system I need
+you to build is a research tool that analyzes real user language about
+retrieval failure, so I can find the specific, evidence-backed opportunity
+area worth solving — before I design any product solution.
+ 
+ 
+WHAT TO BUILD
+-------------
+An AI-powered discovery engine: a pipeline (agentic workflow, RAG system,
+or scripted LLM pipeline) that ingests public user feedback about photo
+retrieval, tags and clusters it along the dimensions below, and produces
+a structured, queryable output plus a short synthesized report. It must
+go beyond summarization and sentiment analysis — it must let me compare
+and rank distinct retrieval-problem clusters using evidence volume and
+severity.
+ 
+Build this as a working, runnable system (not a one-off analysis), with:
+1. A data collection layer
+2. A tagging/classification layer
+3. A clustering/aggregation layer
+4. An opportunity-comparison layer
+5. A lightweight interface or exported report to query/browse results
+ 
+ 
+DATA SOURCES TO COLLECT (public only)
+--------------------------------------
+- Google Play Store reviews for the Google Photos app
+- Apple App Store reviews for the Google Photos app
+- Reddit discussions (e.g. r/googlephotos, r/android, r/photography,
+  relevant threads found via search)
+- Google Photos Help Community / support forum threads
+- YouTube comments on Google Photos review/tutorial videos
+- General web forums or social posts discussing Google Photos search
+  or "can't find my photo" type complaints
+ 
+Respect each platform's terms of service and rate limits. Prefer official
+APIs or exports where available (e.g. Google Play review export, Reddit
+API/PRAW, YouTube Data API). Do not bypass login walls or paywalls.
+Target an initial corpus of at least 500-1000 relevant raw items before
+filtering, aiming for a final filtered/relevant corpus in the low
+hundreds to low thousands.
+ 
+ 
+ANALYSIS REQUIREMENTS — TAGGING SCHEMA
+----------------------------------------
+For each piece of feedback, extract and tag (use an LLM classifier, not
+just keyword rules):
+ 
+1. Relevance: Is this about retrieval/search of existing photos (not
+   upload, editing, sharing, pricing, or unrelated bugs)? [yes/no]
+ 
+2. Retrieval problem type (categorical, allow multi-label):
+   - Search returns irrelevant or no results
+   - Can't find screenshots, documents, or receipts specifically
+   - Can't narrow down or refine after a failed search
+   - Missing or wrong metadata (date, place, people, objects)
+   - People/face grouping or recognition problems
+   - Backup, sync, or storage issue (not true retrieval)
+   - Other / uncategorized
+ 
+3. What the user remembered about the photo (free text + categorical):
+   time/date, place, people present, an event or occasion, an object or
+   visual detail, the purpose/reason they took or saved it, an emotion
+   or mood, none of the above stated
+ 
+4. What the user explicitly said they forgot or didn't know:
+   exact date, exact location, filename/album, search keywords, nothing
+   stated
+ 
+5. How they tried to search (if described): exact keyword, vague
+   description, browsing/scrolling manually, using filters (people/
+   places/things), asking someone else, gave up entirely
+ 
+6. Failure point in the retrieval journey (map to this funnel):
+   (a) could not express what they remembered in a query
+   (b) search did not understand or match the clues given
+   (c) results appeared but user could not judge/recognize the right one
+   (d) search failed and user had no way to refine or narrow it
+   Tag which stage(s) the feedback evidences.
+ 
+7. Severity/sentiment: frustration level (low/med/high) and whether the
+   user abandoned the app or switched to a workaround.
+ 
+8. Source metadata: platform, date if available, upvotes/likes if
+   available (as a rough proxy for how many others share the pain).
+ 
+ 
+ANALYSIS REQUIREMENTS — BEYOND SUMMARIZATION
+-----------------------------------------------
+Do not just summarize or run sentiment analysis. The pipeline must:
+ 
+- Cluster tagged items into named "opportunity areas" (group by problem
+  type + failure-point combination), not just by keyword frequency.
+- For each opportunity area, compute: evidence volume, source diversity
+  (how many platforms it appears on), and estimated severity.
+- Explicitly separate VOICED complaints (users directly say "search
+  doesn't work") from INFERRED patterns (e.g., many users describe
+  purpose/mood-based memory but never explicitly ask for that kind of
+  search) — this second category is the deeper insight the client wants.
+- Produce a comparison table ranking opportunity areas by business
+  relevance (my judgment call, informed by volume + severity) so I can
+  see which is best evidenced vs. which is merely loud.
+- Surface representative verbatim quotes (kept short, properly
+  attributed to source type, not fabricated) for each opportunity area.
+- Flag contradictions or open questions the data can't resolve — these
+  become my primary-research interview questions.
+ 
+ 
+OUTPUT DELIVERABLES FROM THE ENGINE
+--------------------------------------
+1. A structured dataset (JSON or CSV) of every tagged item with its
+   labels, so I can re-query it.
+2. An opportunity-area summary table: area name, description, evidence
+   volume, source breakdown, example quotes, business relevance.
+3. A short markdown/PDF synthesis report (1-2 pages) stating the top
+   3-5 opportunity areas, the "hidden insight" (voiced vs. inferred gap),
+   and open questions for user research.
+4. A simple way to re-run or query it (a script, notebook, or minimal
+   UI/dashboard) — this must be something I can point to as a "working
+   link" deliverable, so host it somewhere reachable (e.g., a simple
+   Streamlit/Gradio app, a notebook with a share link, or a small web
+   app) rather than only local files.
+ 
+ 
+SUGGESTED STACK (flexible — choose what is most reliable to build)
+----------------------------------------------------------------------
+- Collection: Python scripts using platform APIs (Google Play Scraper,
+  PRAW for Reddit, YouTube Data API) or n8n workflows for orchestration
+- Classification/tagging: Claude (or another LLM) via API, using the
+  tagging schema above as a structured-output prompt (return JSON per
+  item)
+- Storage: a simple structured store (SQLite, CSV, or a lightweight
+  vector DB such as Chroma if semantic search/RAG over the corpus is
+  wanted)
+- Aggregation/clustering: Python (pandas) for grouping and scoring;
+  optionally embeddings + clustering for discovering unnamed patterns
+- Interface: a minimal Streamlit or Gradio app, or a static exported
+  report, so it can be shared as a link
+ 
+ 
+CONSTRAINTS
+-----------
+- Only publicly accessible data. No login-gated or scraped-behind-
+  paywall content.
+- No fabricated quotes or invented statistics — every number in the
+  output must trace back to the tagged dataset.
+- Keep the classification schema consistent across all sources so
+  cross-platform comparison is valid.
+- This is a research/discovery tool, not the end product. Do not
+  design or build the actual retrieval feature yet — that comes after
+  this analysis and primary user research.
+ 
+ 
+DEFINITION OF DONE
+-------------------
+- A working, re-runnable pipeline from raw scraped data to tagged
+  dataset to opportunity-area comparison output.
+- At least one hosted/shareable artifact I can open as a link.
+- A synthesis report that names specific, evidence-backed opportunity
+  areas (not "search should be better") with volume, severity and
+  example quotes for each, plus a clear statement of what is voiced
+  vs. inferred from the data.
+ 
