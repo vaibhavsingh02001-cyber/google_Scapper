@@ -132,13 +132,25 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[Message]
 
-GROQ_MODELS = [
-    "llama-3.3-70b-versatile",
-    "llama3-70b-8192",
-    "llama3-8b-8192",
-    "gemma2-9b-it",
-    "mixtral-8x7b-32768"
-]
+def get_active_models(client: Groq) -> List[str]:
+    preferred_order = [
+        "llama-3.3-70b-versatile",
+        "deepseek-r1-distill-llama-70b",
+        "llama-3.1-70b-versatile",
+        "llama-3.2-3b-preview",
+        "llama-3.2-1b-preview",
+        "gemma2-9b-it",
+        "qwen-2.5-32b"
+    ]
+    try:
+        remote_models = client.models.list()
+        active_ids = {m.id for m in remote_models.data}
+        matched = [m for m in preferred_order if m in active_ids]
+        if matched:
+            return matched
+        return list(active_ids)[:4]
+    except Exception:
+        return ["llama-3.3-70b-versatile", "deepseek-r1-distill-llama-70b", "llama-3.2-3b-preview", "gemma2-9b-it"]
 
 async def handle_chat_stream(req: ChatRequest):
     api_key = os.getenv("GROQ_API_KEY", GROQ_API_KEY)
@@ -148,20 +160,25 @@ async def handle_chat_stream(req: ChatRequest):
     msgs = [{"role": "system", "content": system_prompt()}]
     msgs += [{"role": m.role, "content": m.content} for m in req.messages]
 
+    models_to_try = get_active_models(client)
+
     def gen():
         last_err = ""
-        for model in GROQ_MODELS:
+        for model in models_to_try:
             try:
                 stream = client.chat.completions.create(
                     model=model, messages=msgs, temperature=0.7,
                     max_tokens=1024, stream=True
                 )
+                stream_started = False
                 for chunk in stream:
                     d = chunk.choices[0].delta
                     if d and d.content:
+                        stream_started = True
                         yield f"data: {json.dumps({'t': d.content})}\n\n"
-                yield f"data: {json.dumps({'done': True})}\n\n"
-                return
+                if stream_started:
+                    yield f"data: {json.dumps({'done': True})}\n\n"
+                    return
             except Exception as e:
                 last_err = str(e)
                 continue
