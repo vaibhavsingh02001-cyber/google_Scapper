@@ -213,6 +213,13 @@ async def health_endpoint():
 async def api_status():
     return {"status": "Discovery Engine API is running"}
 
+@app.get("/bundle.json")
+@app.get("/data/bundle.json")
+@app.get("/api/bundle.json")
+@app.get("/api/data/bundle.json")
+async def serve_bundle_direct():
+    return _BUNDLE
+
 # ── Static File Endpoints (Guarantees UI renders on any Vercel routing) ───────
 @app.get("/")
 @app.get("/index.html")
@@ -238,6 +245,8 @@ async def serve_js():
 
 @app.get("/data/{filename}")
 async def serve_data_file(filename: str):
+    if filename == "bundle.json":
+        return _BUNDLE
     f = find_file(f"data/{filename}") or find_file(filename)
     if f:
         media_type = "application/json" if filename.endswith(".json") else "text/plain"

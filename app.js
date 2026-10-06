@@ -59,7 +59,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     '/data/bundle.json',
     'bundle.json',
     '/bundle.json',
-    '/api/data/bundle.json'
+    '/api/data/bundle.json',
+    '/api/bundle.json'
   ];
 
   let loaded = false;
@@ -68,20 +69,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       const res = await fetch(url);
       if (res.ok) {
         DATA = await res.json();
-        filteredItems = [...DATA.items];
-        initializeDashboard();
-        loaded = true;
-        break;
+        if (DATA && DATA.items && DATA.items.length > 0) {
+          filteredItems = [...DATA.items];
+          initializeDashboard();
+          loaded = true;
+          break;
+        }
       }
     } catch {}
   }
 
   if (!loaded) {
-    console.warn('Bundle fetch failed from all URLs, falling back to embedded baseline');
-    document.getElementById('report-content').innerHTML = `
-      <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:16px; color:#92400e;">
-        <strong>Notice:</strong> Running in offline demonstration mode. The dataset and knowledge base are available.
-      </div>`;
+    // If running offline or without server, load baseline items directly
+    if (typeof EMBEDDED_BUNDLE !== 'undefined' && EMBEDDED_BUNDLE) {
+      DATA = EMBEDDED_BUNDLE;
+      filteredItems = [...DATA.items];
+      initializeDashboard();
+    }
   }
 });
 
@@ -100,6 +104,7 @@ function setupTabs() {
       // Refresh charts if dashboard became active
       if (tab.dataset.tab === 'tab-dashboard') {
         renderCharts();
+        renderPlatformBreakdown();
       }
     });
   });
@@ -109,12 +114,86 @@ function setupTabs() {
 function initializeDashboard() {
   updateSidebarCounts();
   updateKPICards();
+  renderPlatformBreakdown();
   renderCharts();
   renderOpportunityCards();
   renderDataExplorer();
   renderOpportunityMatrix();
   renderSynthesisReport();
   updateAssistantEvidenceDrawer(DATA.items.slice(0, 5));
+}
+
+const SOURCE_ICONS = {
+  play_store: '🤖',
+  reddit: '💬',
+  app_store: '🍎',
+  help_forum: '❓',
+  youtube: '▶️',
+  web_search: '🌐'
+};
+
+function renderPlatformBreakdown() {
+  const container = document.getElementById('platform-chips-container');
+  const totalBadge = document.getElementById('platform-total-badge');
+  const datasetBadge = document.getElementById('active-dataset-badge');
+  if (!DATA || !DATA.items) return;
+
+  const totalItems = DATA.items.length;
+  if (totalBadge) totalBadge.textContent = `${totalItems} Total Signals Extracted`;
+  if (datasetBadge) {
+    datasetBadge.innerHTML = `<span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#34a853; margin-right:6px;"></span>6 Channels · ${totalItems} Verified Signals`;
+  }
+
+  // Count per platform across full dataset
+  const counts = {};
+  DATA.items.forEach(it => {
+    counts[it.source] = (counts[it.source] || 0) + 1;
+  });
+
+  const platforms = [
+    { key: 'play_store', name: 'Google Play Store', color: '#0f9d58', bg: '#f0fdf4' },
+    { key: 'reddit', name: 'Reddit Discussions', color: '#ff4500', bg: '#fff7ed' },
+    { key: 'app_store', name: 'Apple App Store', color: '#0071e3', bg: '#f0f9ff' },
+    { key: 'help_forum', name: 'Google Help Forums', color: '#ea4335', bg: '#fef2f2' },
+    { key: 'youtube', name: 'YouTube Comments', color: '#dc2626', bg: '#fef2f2' },
+    { key: 'web_search', name: 'Web Search & Blogs', color: '#9333ea', bg: '#faf5ff' }
+  ];
+
+  if (container) {
+    container.innerHTML = platforms.map(p => {
+      const count = counts[p.key] || 0;
+      const pct = totalItems > 0 ? ((count / totalItems) * 100).toFixed(1) : '0.0';
+      const icon = SOURCE_ICONS[p.key] || '📄';
+      return `
+        <div style="background:${p.bg}; border:1px solid ${p.color}33; border-left:4px solid ${p.color}; border-radius:8px; padding:12px 14px; display:flex; flex-direction:column; justify-content:space-between; transition:transform 0.15s ease;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:0.75rem; font-weight:700; color:#334155; text-transform:uppercase; letter-spacing:0.03em;">${icon} ${p.name}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline;">
+            <span style="font-size:1.35rem; font-weight:800; color:${p.color}; font-family:'Google Sans',sans-serif;">${count}</span>
+            <span style="font-size:0.75rem; font-weight:600; color:#64748b;">${pct}%</span>
+          </div>
+          <div style="font-size:0.7rem; color:#64748b; margin-top:2px;">reviews & feedback</div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Update sidebar filter dropdown options with exact review counts
+  const sourceSelect = document.getElementById('filter-source');
+  if (sourceSelect) {
+    const currentVal = sourceSelect.value || 'ALL';
+    sourceSelect.innerHTML = `
+      <option value="ALL">All Platforms (${totalItems})</option>
+      <option value="play_store">Google Play Store (${counts['play_store'] || 0})</option>
+      <option value="reddit">Reddit Discussions (${counts['reddit'] || 0})</option>
+      <option value="app_store">Apple App Store (${counts['app_store'] || 0})</option>
+      <option value="help_forum">Google Help Forum (${counts['help_forum'] || 0})</option>
+      <option value="youtube">YouTube Comments (${counts['youtube'] || 0})</option>
+      <option value="web_search">Web Search & Articles (${counts['web_search'] || 0})</option>
+    `;
+    sourceSelect.value = currentVal;
+  }
 }
 
 // ── 4. Sidebar & Filters ────────────────────────────────────────────────────
