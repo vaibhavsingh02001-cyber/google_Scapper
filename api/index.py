@@ -1,22 +1,22 @@
 """
 api/index.py - FastAPI Serverless Endpoint for Discovery Engine AI Assistant on Vercel.
-Supports both /api/* routes and direct execution.
+Serves both static frontend assets (index.html, styles.css, app.js, data) and AI streaming endpoints (/api/chat, /api/health).
 """
 import json, os, sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 try:
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import StreamingResponse
+    from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
     from pydantic import BaseModel
 except ImportError:
     import subprocess
     subprocess.check_call([sys.executable, "-m", "pip", "install", "fastapi", "uvicorn[standard]", "pydantic"])
     from fastapi import FastAPI, HTTPException
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import StreamingResponse
+    from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse
     from pydantic import BaseModel
 
 try:
@@ -36,7 +36,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 LLM_PRIMARY  = "llama-3.3-70b-versatile"
 LLM_FALLBACK = "llama-3.1-8b-instant"
 
-app = FastAPI(title="Discovery Engine Chat API")
+app = FastAPI(title="Discovery Engine & AI Assistant")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -45,24 +45,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def find_file(rel_path: str) -> Optional[Path]:
+    candidates = [
+        Path(__file__).resolve().parent.parent / rel_path,
+        Path(__file__).resolve().parent / rel_path,
+        Path.cwd() / rel_path,
+        Path(rel_path),
+    ]
+    for p in candidates:
+        if p.exists() and p.is_file():
+            return p
+    return None
+
 _BUNDLE: dict = {}
 _DATA_CTX: str = ""
 
 def load_bundle():
     global _BUNDLE, _DATA_CTX
-    candidates = [
-        Path(__file__).resolve().parent.parent / "data" / "bundle.json",
-        Path(__file__).resolve().parent / "bundle.json",
-        Path(__file__).resolve().parent / "data" / "bundle.json",
-        Path.cwd() / "data" / "bundle.json",
-        Path("data/bundle.json"),
-    ]
-    bundle_path = None
-    for p in candidates:
-        if p.exists():
-            bundle_path = p
-            break
-
+    bundle_path = find_file("data/bundle.json") or find_file("bundle.json")
     if not bundle_path:
         _DATA_CTX = "No data bundle available. Answer general questions."
         return
@@ -159,7 +159,7 @@ def handle_health():
     api_key = os.getenv("GROQ_API_KEY", GROQ_API_KEY)
     return {"ok": True, "key": bool(api_key), "items": len(_BUNDLE.get("items", []))}
 
-# Support both prefixed and non-prefixed routes for Vercel and local server
+# ── API Endpoints ─────────────────────────────────────────────────────────────
 @app.post("/chat")
 @app.post("/api/chat")
 async def chat_endpoint(req: ChatRequest):
@@ -173,6 +173,37 @@ async def health_endpoint():
 @app.get("/api")
 async def api_status():
     return {"status": "Discovery Engine API is running"}
+
+# ── Static File Endpoints (Guarantees UI renders on any Vercel routing) ───────
+@app.get("/")
+@app.get("/index.html")
+async def serve_index():
+    f = find_file("index.html")
+    if f:
+        return FileResponse(f, media_type="text/html")
+    return HTMLResponse("<h1>Google Photos Discovery Engine</h1><p>index.html not found</p>")
+
+@app.get("/styles.css")
+async def serve_css():
+    f = find_file("styles.css")
+    if f:
+        return FileResponse(f, media_type="text/css")
+    raise HTTPException(404, "styles.css not found")
+
+@app.get("/app.js")
+async def serve_js():
+    f = find_file("app.js")
+    if f:
+        return FileResponse(f, media_type="application/javascript")
+    raise HTTPException(404, "app.js not found")
+
+@app.get("/data/{filename}")
+async def serve_data_file(filename: str):
+    f = find_file(f"data/{filename}") or find_file(filename)
+    if f:
+        media_type = "application/json" if filename.endswith(".json") else "text/plain"
+        return FileResponse(f, media_type=media_type)
+    raise HTTPException(404, f"data/{filename} not found")
 
 if __name__ == "__main__":
     import uvicorn
