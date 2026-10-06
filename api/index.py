@@ -170,9 +170,8 @@ async def chat_endpoint(req: ChatRequest):
 async def health_endpoint():
     return handle_health()
 
-@app.get("/")
 @app.get("/api")
-async def root():
+async def api_status():
     return {"status": "Discovery Engine API is running"}
 
 if __name__ == "__main__":
