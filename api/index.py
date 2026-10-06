@@ -132,6 +132,14 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[Message]
 
+GROQ_MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama3-70b-8192",
+    "llama3-8b-8192",
+    "gemma2-9b-it",
+    "mixtral-8x7b-32768"
+]
+
 async def handle_chat_stream(req: ChatRequest):
     api_key = os.getenv("GROQ_API_KEY", GROQ_API_KEY)
     if not api_key:
@@ -140,23 +148,24 @@ async def handle_chat_stream(req: ChatRequest):
     msgs = [{"role": "system", "content": system_prompt()}]
     msgs += [{"role": m.role, "content": m.content} for m in req.messages]
 
-    def gen(model=LLM_PRIMARY):
-        try:
-            stream = client.chat.completions.create(
-                model=model, messages=msgs, temperature=0.7,
-                max_tokens=1024, stream=True
-            )
-            for chunk in stream:
-                d = chunk.choices[0].delta
-                if d and d.content:
-                    yield f"data: {json.dumps({'t': d.content})}\n\n"
-            yield f"data: {json.dumps({'done': True})}\n\n"
-        except Exception as e:
-            if model == LLM_PRIMARY:
-                for tok in gen(LLM_FALLBACK):
-                    yield tok
-            else:
-                yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    def gen():
+        last_err = ""
+        for model in GROQ_MODELS:
+            try:
+                stream = client.chat.completions.create(
+                    model=model, messages=msgs, temperature=0.7,
+                    max_tokens=1024, stream=True
+                )
+                for chunk in stream:
+                    d = chunk.choices[0].delta
+                    if d and d.content:
+                        yield f"data: {json.dumps({'t': d.content})}\n\n"
+                yield f"data: {json.dumps({'done': True})}\n\n"
+                return
+            except Exception as e:
+                last_err = str(e)
+                continue
+        yield f"data: {json.dumps({'error': f'Groq AI Error: {last_err}'})}\n\n"
 
     return StreamingResponse(
         gen(),

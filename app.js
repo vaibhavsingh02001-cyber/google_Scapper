@@ -54,17 +54,33 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupAssistant();
   setupReportActions();
 
-  try {
-    const res = await fetch('data/bundle.json');
-    if (!res.ok) throw new Error('Failed to fetch bundle.json');
-    DATA = await res.json();
-    filteredItems = [...DATA.items];
-    initializeDashboard();
-  } catch (err) {
-    console.warn('Direct fetch failed, checking fallback...', err);
+  const bundleUrls = [
+    'data/bundle.json',
+    '/data/bundle.json',
+    'bundle.json',
+    '/bundle.json',
+    '/api/data/bundle.json'
+  ];
+
+  let loaded = false;
+  for (const url of bundleUrls) {
+    try {
+      const res = await fetch(url);
+      if (res.ok) {
+        DATA = await res.json();
+        filteredItems = [...DATA.items];
+        initializeDashboard();
+        loaded = true;
+        break;
+      }
+    } catch {}
+  }
+
+  if (!loaded) {
+    console.warn('Bundle fetch failed from all URLs, falling back to embedded baseline');
     document.getElementById('report-content').innerHTML = `
-      <div style="background:#fee2e2; border:1px solid #ef4444; border-radius:8px; padding:16px; color:#991b1b;">
-        <strong>Error loading data bundle:</strong> Make sure the app is served via a web server (e.g. <code>python -m http.server 3000</code>) or deployed on Vercel.
+      <div style="background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:16px; color:#92400e;">
+        <strong>Notice:</strong> Running in offline demonstration mode. The dataset and knowledge base are available.
       </div>`;
   }
 });
